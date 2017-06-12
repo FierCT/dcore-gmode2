@@ -1,6 +1,8 @@
 AddCSLuaFile("cl_dcore.lua")
 util.AddNetworkString("f_drequest")
 util.AddNetworkString("f_drawderma")
+util.AddNetworkString("f_dbuttonpress")
+util.AddNetworkString("f_dtextentry")
 
 local Reqs = 0
 local ReqsTab = {}
@@ -45,7 +47,6 @@ local function access(ply, id, accept)
   if accept then
     if IsValid(e2) then
       req:ChatPrint("You can now create Derma objects on "..ply:Name().."'s screen.")
-      ply:ChatPrint(req:Name().." can now create Derma objects on your screen.")
 
       e2.ClkTimeDAccept = CurTime()
       e2.ClkPlayer = ply
@@ -120,6 +121,64 @@ local function drawDText(chip, ply, id, x, y, text, parent, color)
   net.Send(ply)
 end
 
+local function drawDButton(chip, ply, id, x, y, width, height, text, parent)
+  if not IsValid(chip) and not chip then return end
+  if not id then return end
+  if not parent then return end
+
+  if not text then text = "Button" end
+
+  if not x then x = 0 end
+  if not y then y = 0 end
+
+  if not width then width = 0 end
+  if not height then height = 0 end
+
+  net.Start("f_drawderma")
+    net.WriteEntity(chip)
+    net.WriteString("button")
+    net.WriteString(tostring(id))
+
+    net.WriteFloat(x)
+    net.WriteFloat(y)
+
+    net.WriteFloat(width)
+    net.WriteFloat(height)
+
+    net.WriteString(text)
+    net.WriteString(tostring(parent))
+  net.Send(ply)
+end
+
+local function drawDTextEntry(chip, ply, id, x, y, width, height, text, parent)
+  if not IsValid(chip) and not chip then return end
+  if not id then return end
+  if not parent then return end
+
+  if not text then text = "TextBox" end
+
+  if not x then x = 0 end
+  if not y then y = 0 end
+
+  if not width then width = 0 end
+  if not height then height = 0 end
+
+  net.Start("f_drawderma")
+    net.WriteEntity(chip)
+    net.WriteString("textentry")
+    net.WriteString(tostring(id))
+
+    net.WriteFloat(x)
+    net.WriteFloat(y)
+
+    net.WriteFloat(width)
+    net.WriteFloat(height)
+
+    net.WriteString(text)
+    net.WriteString(tostring(parent))
+  net.Send(ply)
+end
+
 local function canRunDerma(chip, ply)
   if not chip then return 0 end
   if not ply then return 0 end
@@ -167,6 +226,26 @@ end
 
 --
 
+e2function void entity:dermaButton(string id, string text, vector2 pos, vector2 size, string parent)
+  drawDButton(self.entity, this, id, pos[1], pos[2], size[1], size[2], text, parent)
+end
+
+e2function void entity:dermaButton(string id, vector2 pos, vector2 size, string parent)
+  drawDButton(self.entity, this, id, pos[1], pos[2], size[1], size[2], "Button", parent)
+end
+
+--
+
+e2function void entity:dermaTextBox(string id, string text, vector2 pos, vector2 size, string parent)
+  drawDTextEntry(self.entity, this, id, pos[1], pos[2], size[1], size[2], text, parent)
+end
+
+e2function void entity:dermaTextBox(string id, vector2 pos, vector2 size, string parent)
+  drawDTextEntry(self.entity, this, id, pos[1], pos[2], size[1], size[2], "TextBox", parent)
+end
+
+--
+
 e2function number entity:canRunDerma()
   return canRunDerma(self.entity, this)
 end
@@ -177,6 +256,82 @@ e2function number dermaAcceptClk()
   if not self.entity.ClkTimeDAccept then return 0 end
   return self.entity.ClkTimeDAccept == CurTime() and 1 or 0
 end
+
+e2function number dermaButtonClk()
+  if not self.entity.ClkTimeDButton then return 0 end
+  return self.entity.ClkTimeDButton == CurTime() and 1 or 0
+end
+
+e2function number dermaButtonClk(string id)
+  if not self.entity.ClkTimeDButton then return 0 end
+  if not self.entity.ClkButtonTitle then return 0 end
+  return (self.entity.ClkButtonTitle == id and self.entity.ClkTimeDButton == CurTime()) and 1 or 0
+end
+
+e2function string dermaButtonClkID()
+  if not self.entity.ClkButtonTitle then return nil end
+  return self.entity.ClkButtonTitle
+end
+
+e2function entity dermaButtonClkPly()
+  if not self.entity.ClkButtonPly then return nil end
+  if not self.entity.ClkButtonPly:IsPlayer() then return nil end
+
+  return self.entity.ClkButtonPly
+end
+
+e2function number dermaTextBoxClk()
+  if not self.entity.ClkTimeDTBox then return 0 end
+  return self.entity.ClkTimeDTBox == CurTime() and 1 or 0
+end
+
+e2function number dermaTextBoxClk(string id)
+  if not self.entity.ClkTimeDTBox then return 0 end
+  if not self.entity.ClkDTBoxTitle then return 0 end
+  return (self.entity.ClkDTBoxTitle == id and self.entity.ClkTimeDTBox == CurTime()) and 1 or 0
+end
+
+e2function entity dermaTextBoxClkPly()
+  if not self.entity.ClkDTBoxPly then return nil end
+  if not self.entity.ClkDTBoxPly:IsPlayer() then return nil end
+
+  return self.entity.ClkDTBoxPly
+end
+
+e2function string dermaTextBoxClkID()
+  if not self.entity.ClkDTBoxTitle then return nil end
+  return self.entity.ClkDTBoxTitle
+end
+
+e2function string dermaTextBoxClkValue()
+  if not self.entity.ClkDTBoxValue then return nil end
+  return self.entity.ClkDTBoxValue
+end
+
+--
+
+net.Receive("f_dbuttonpress", function(len, ply)
+  local chip = net.ReadEntity()
+  local id = net.ReadString()
+
+  chip.ClkTimeDButton = CurTime()
+  chip.ClkButtonPly = ply
+  chip.ClkButtonTitle = id
+  chip:Execute()
+
+end)
+
+net.Receive("f_dtextentry", function(len, ply)
+  local chip = net.ReadEntity()
+  local id = net.ReadString()
+  local text = net.ReadString()
+
+  chip.ClkTimeDTBox = CurTime()
+  chip.ClkDTBoxPly = ply
+  chip.ClkDTBoxTitle = id
+  chip.ClkDTBoxValue = text
+  chip:Execute()
+end)
 
 concommand.Add("de2_accept", function(ply, com, arg)
   if not ply then return end

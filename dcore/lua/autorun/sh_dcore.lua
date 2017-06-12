@@ -118,20 +118,15 @@ concommand.Add("de2_unblockplayer", function(ply, com, args)
     return ret
 end)
 
-local function objExists(id)
-  for k, v in pairs(DermaID) do
-    if k == id then
-      return 1
-    end
-  end
-  return 0
-end
+
 
 -- where we're actually drawing derma! :D
 
 local DObjects = {}
 DObjects["frame"] = "frame"
 DObjects["text"] = "text"
+DObjects["button"] = "button"
+DObjects["textentry"] = "textentry"
 
 net.Receive("f_drawderma", function()
   local chip = net.ReadEntity()
@@ -141,7 +136,7 @@ net.Receive("f_drawderma", function()
   if not _DRAllowed[chip] then return end
   if not DObjects[typ] then return end
 
-  if objExists(id) == 1 then return end
+  if DermaID[id] then return end
 
   if typ == "frame" then
 
@@ -158,14 +153,16 @@ net.Receive("f_drawderma", function()
     frame:SetSize(tab["width"], tab["height"])
     frame:SetTitle(tab["title"])
     frame:SetDraggable(tab["draggable"])
+    frame:SetDeleteOnClose(true)
     frame:ShowCloseButton(true)
-    frame.OnClose = function()
-      DermaFrames[id] = nil
+    frame.OnClose =
+    function()
       for k, v in pairs(DermaID) do
         if v == id then
           DermaID[k] = nil
         end
       end
+      DermaFrames[id] = nil
     end
     frame:SetSizable(false)
     frame:MakePopup()
@@ -185,19 +182,73 @@ net.Receive("f_drawderma", function()
     tab["text"] = net.ReadString()
     tab["parent"] = net.ReadString()
 
-    print(tab["parent"])
-    print(DermaFrames[tab["parent"]])
-
     local text = vgui.Create("DLabel", DermaFrames[tab["parent"]])
     text:SetPos(tab["x"], tab["y"])
     text:SetText(tab["text"])
     text:SizeToContents()
     text:SetTextColor(Color(tab["r"],tab["g"],tab["b"]))
 
-    DermaID[id] = parent
+    DermaID[id] = tab["parent"]
+
+  elseif typ == "button" then
+    local tab = {}
+    tab["x"] = net.ReadFloat()
+    tab["y"] = net.ReadFloat()
+
+    tab["width"] = net.ReadFloat()
+    tab["height"] = net.ReadFloat()
+
+    tab["text"] = net.ReadString()
+    tab["parent"] = net.ReadString()
+
+    local button = vgui.Create("DButton", DermaFrames[tab["parent"]])
+    button:SetPos(tab["x"], tab["y"])
+    button:SetSize(tab["width"], tab["height"])
+    button:SetText(tab["text"])
+    button.DoClick =
+    function()
+      net.Start("f_dbuttonpress")
+        net.WriteEntity(chip)
+        net.WriteString(id)
+      net.SendToServer()
+    end
+
+    DermaID[id] = tab["parent"]
+
+  elseif typ == "textentry" then
+    local tab = {}
+    tab["x"] = net.ReadFloat()
+    tab["y"] = net.ReadFloat()
+
+    tab["width"] = net.ReadFloat()
+    tab["height"] = net.ReadFloat()
+
+    tab["text"] = net.ReadString()
+    tab["parent"] = net.ReadString()
+
+    local textbox = vgui.Create("DTextEntry", DermaFrames[tab["parent"]])
+    textbox:SetPos(tab["x"], tab["y"])
+    textbox:SetSize(tab["width"], tab["height"])
+    textbox:SetText(tab["text"])
+    textbox.OnEnter =
+    function(self)
+      net.Start("f_dtextentry")
+        net.WriteEntity(chip)
+        net.WriteString(id)
+        net.WriteString(self:GetValue())
+      net.SendToServer()
+    end
+
+    DermaID[id] = tab["parent"]
 
   end
 
+end)
+
+concommand.Add("de2_clear", function(ply,com,args)
+  for k, v in pairs(DermaFrames) do
+    DermaFrames[k]:Close()
+  end
 end)
 
 concommand.Add("de2_resetall", function(ply,com,args)

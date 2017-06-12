@@ -1,4 +1,4 @@
-AddCSLuaFile("cl_derma_fier.lua")
+AddCSLuaFile("cl_dcore.lua")
 util.AddNetworkString("f_drequest")
 util.AddNetworkString("f_drawderma")
 

@@ -9,6 +9,8 @@ local _DRBlocked = {}
 local DermaFrames = {}
 local DermaID = {}
 
+local AD = AllDerma
+
 local function requestSh(ply, id, chip)
   if not IsValid(ply) then return end
   if not ply:IsPlayer() then return end
@@ -119,7 +121,6 @@ concommand.Add("de2_unblockplayer", function(ply, com, args)
 end)
 
 
-
 -- where we're actually drawing derma! :D
 
 local DObjects = {}
@@ -129,82 +130,85 @@ DObjects["button"] = "button"
 DObjects["textentry"] = "textentry"
 
 net.Receive("f_drawderma", function()
-  local chip = net.ReadEntity()
-  local typ = net.ReadString()
-  local id = net.ReadString()
+  local tab = net.ReadTable()
+  local chip = tab["chip"]
+  local id = tab["id"]
+  local typ = tab["type"]
 
   if not _DRAllowed[chip] then return end
   if not DObjects[typ] then return end
 
-  if DermaID[id] then return end
-
   if typ == "frame" then
 
-    local tab = {}
-    tab["x"] = net.ReadFloat()
-    tab["y"] = net.ReadFloat()
-    tab["width"] = net.ReadFloat()
-    tab["height"] = net.ReadFloat()
-    tab["title"] = net.ReadString()
-    tab["draggable"] = net.ReadBool()
+    if DermaID[id] then return end
+
+    local x, y, w, h = tab["x"], tab["y"], tab["w"], tab["h"]
+    local title = tab["title"]
+    local drag = tab["draggable"]
+    local color = tab["color"]
 
     local frame = vgui.Create("DFrame")
-    frame:SetPos(tab["x"], tab["y"])
-    frame:SetSize(tab["width"], tab["height"])
-    frame:SetTitle(tab["title"])
-    frame:SetDraggable(tab["draggable"])
+    if x > ScrW() or x < 0 then x = ScrW()/2-w/2 end
+    if y > ScrH() or y < 0 then y = ScrH()/2-h/2 end
+    frame:SetPos(x, y)
+    if w > ScrW() then w = ScrW() end
+    if h > ScrH() then h = ScrH() end
+    if w < 200 then w = 200 end
+    if h < 75 then h = 75 end
+    frame:SetSize(w, h)
+    frame:SetTitle(title)
+    frame:SetDraggable(drag)
     frame:SetDeleteOnClose(true)
     frame:ShowCloseButton(true)
+
     frame.OnClose =
     function()
       for k, v in pairs(DermaID) do
-        if v == id then
+        if DermaID[k]["parent"] == id then
           DermaID[k] = nil
         end
       end
       DermaFrames[id] = nil
     end
+
     frame:SetSizable(false)
     frame:MakePopup()
 
     DermaFrames[id] = frame
-    DermaID[id] = id
+    DermaID[id] = {}
+    DermaID[id]["parent"] = id
+    DermaID[id]["obj"] = frame
 
   elseif typ == "text" then
-    local tab = {}
-    tab["x"] = net.ReadFloat()
-    tab["y"] = net.ReadFloat()
 
-    tab["r"] = net.ReadFloat()
-    tab["g"] = net.ReadFloat()
-    tab["b"] = net.ReadFloat()
+    if DermaID[id] then return end
 
-    tab["text"] = net.ReadString()
-    tab["parent"] = net.ReadString()
+    local x, y = tab["x"], tab["y"]
+    local text2 = tab["text"]
+    local parent = tab["parent"]
+    local color = tab["color"]
 
-    local text = vgui.Create("DLabel", DermaFrames[tab["parent"]])
-    text:SetPos(tab["x"], tab["y"])
-    text:SetText(tab["text"])
+    local text = vgui.Create("DLabel", DermaFrames[parent])
+    text:SetPos(x,y)
+    text:SetText(text2)
     text:SizeToContents()
-    text:SetTextColor(Color(tab["r"],tab["g"],tab["b"]))
+    text:SetTextColor(Color(color[1],color[2],color[3]))
 
-    DermaID[id] = tab["parent"]
+    DermaID[id] = {}
+    DermaID[id]["parent"] = parent
+    DermaID[id]["obj"] = text
 
   elseif typ == "button" then
-    local tab = {}
-    tab["x"] = net.ReadFloat()
-    tab["y"] = net.ReadFloat()
-
-    tab["width"] = net.ReadFloat()
-    tab["height"] = net.ReadFloat()
-
-    tab["text"] = net.ReadString()
-    tab["parent"] = net.ReadString()
+    local x, y, w, h = tab["x"], tab["y"], tab["w"], tab["h"]
+    local text = tab["text"]
+    local parent = tab["parent"]
+    local color = tab["color"]
 
     local button = vgui.Create("DButton", DermaFrames[tab["parent"]])
-    button:SetPos(tab["x"], tab["y"])
-    button:SetSize(tab["width"], tab["height"])
-    button:SetText(tab["text"])
+    button:SetPos(x,y)
+    button:SetSize(w,h)
+    button:SetText(text)
+    button:SetTextColor(color)
     button.DoClick =
     function()
       net.Start("f_dbuttonpress")
@@ -213,23 +217,22 @@ net.Receive("f_drawderma", function()
       net.SendToServer()
     end
 
-    DermaID[id] = tab["parent"]
+    DermaID[id] = {}
+    DermaID[id]["parent"] = parent
+    DermaID[id]["obj"] = button
 
   elseif typ == "textentry" then
-    local tab = {}
-    tab["x"] = net.ReadFloat()
-    tab["y"] = net.ReadFloat()
 
-    tab["width"] = net.ReadFloat()
-    tab["height"] = net.ReadFloat()
+    if DermaID[id] then return end
 
-    tab["text"] = net.ReadString()
-    tab["parent"] = net.ReadString()
+    local x, y, w, h = tab["x"], tab["y"], tab["w"], tab["h"]
+    local text = tab["text"]
+    local parent = tab["parent"]
 
-    local textbox = vgui.Create("DTextEntry", DermaFrames[tab["parent"]])
-    textbox:SetPos(tab["x"], tab["y"])
-    textbox:SetSize(tab["width"], tab["height"])
-    textbox:SetText(tab["text"])
+    local textbox = vgui.Create("DTextEntry", DermaFrames[parent])
+    textbox:SetPos(x,y)
+    textbox:SetSize(w,h)
+    textbox:SetText(text)
     textbox.OnEnter =
     function(self)
       net.Start("f_dtextentry")
@@ -239,16 +242,53 @@ net.Receive("f_drawderma", function()
       net.SendToServer()
     end
 
-    DermaID[id] = tab["parent"]
+    DermaID[id] = {}
+    DermaID[id]["parent"] = parent
+    DermaID[id]["obj"] = textbox
 
   end
+
+concommand.Add("de2_clear", function(ply,com,args)
+  for k, v in pairs(DermaID) do
+    if k == DermaID[k]["parent"] then
+      DermaID[k]["obj"]:Close()
+    end
+  end
+end)
 
 end)
 
-concommand.Add("de2_clear", function(ply,com,args)
-  for k, v in pairs(DermaFrames) do
-    DermaFrames[k]:Close()
+net.Receive("f_paint", function()
+  local tab = net.ReadTable()
+  local x, y, w, h = tab["x"], tab["y"], tab["w"], tab["h"]
+  local id, typ = tab["id"], tab["type"]
+  local color = tab["color"]
+
+  if not DermaID[id] then return end
+
+  if not DermaID[id]["paint"] then DermaID[id]["paint"] = {} end
+  local drawid = table.Count(DermaID[id]["paint"])+1
+
+
+  local tab = {}
+  tab["x"] = x
+  tab["y"] = y
+  tab["w"] = w
+  tab["h"] = h
+  tab["typ"] = typ
+  tab["color"] = color
+  DermaID[id]["paint"][drawid] = tab
+
+  local obj = DermaID[id]["obj"]
+  obj.Paint =
+  function()
+    for k, v in pairs(DermaID[id]["paint"]) do
+      if v["typ"] == "roundedbox" then
+        draw.RoundedBox(0, v["x"], v["y"], v["w"], v["h"], v["color"])
+      end
+    end
   end
+
 end)
 
 concommand.Add("de2_resetall", function(ply,com,args)

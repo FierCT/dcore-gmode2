@@ -1,14 +1,18 @@
 AddCSLuaFile("cl_dcore.lua")
+
 util.AddNetworkString("f_drequest")
 util.AddNetworkString("f_drawderma")
 util.AddNetworkString("f_dbuttonpress")
 util.AddNetworkString("f_dtextentry")
+util.AddNetworkString("f_paint")
 
 local Reqs = 0
 local ReqsTab = {}
 local Player = FindMetaTable("Player")
 
 local Plys = {}
+
+AllDerma = {}
 
 local function requestAccess(chip, ply)
   local user = chip.player
@@ -49,7 +53,7 @@ local function access(ply, id, accept)
       req:ChatPrint("You can now create Derma objects on "..ply:Name().."'s screen.")
 
       e2.ClkTimeDAccept = CurTime()
-      e2.ClkPlayer = ply
+      e2.ClkAcceptPly = ply
       e2.ClkTitle = id
       e2:Execute()
 
@@ -57,7 +61,7 @@ local function access(ply, id, accept)
   end
 end
 
-local function drawFrame(chip, ply, id, x, y, width, height, draggable, title)
+local function drawFrame(chip, ply, id, x, y, width, height, draggable, title, color)
   if not IsValid(chip) and not chip then return end
   if not id then return end
 
@@ -70,26 +74,29 @@ local function drawFrame(chip, ply, id, x, y, width, height, draggable, title)
   if not draggable then draggable = true end
   if not title then title = "Derma Frame" end
 
+  if not color then color = {false} end
+  if color[4] then if color[4] < 160 then color[4] = 255 end end
+
   if isnumber(draggable) then
     if draggable != 0 and draggable != 1 then return end
     if draggable == 0 then draggable = false end
     if draggable == 1 then draggable = true end
   end
 
+  local SendTab = {}
+  SendTab["chip"] = chip
+  SendTab["type"] = "frame"
+  SendTab["id"] = tostring(id)
+  SendTab["x"] = x
+  SendTab["y"] = y
+  SendTab["w"] = width
+  SendTab["h"] = height
+  SendTab["title"] = title
+  SendTab["color"] = color
+  SendTab["draggable"] = draggable
+
   net.Start("f_drawderma")
-    net.WriteEntity(chip)
-    net.WriteString("frame")
-    net.WriteString(tostring(id))
-
-    net.WriteFloat(x)
-    net.WriteFloat(y)
-
-    net.WriteFloat(width)
-    net.WriteFloat(height)
-
-    net.WriteString(title)
-    net.WriteBool(draggable)
-
+    net.WriteTable(SendTab)
   net.Send(ply)
 end
 
@@ -104,24 +111,22 @@ local function drawDText(chip, ply, id, x, y, text, parent, color)
 
   if not color then color={255,255,255} end
 
+  local SendTab = {}
+  SendTab["chip"] = chip
+  SendTab["type"] = "text"
+  SendTab["id"] = tostring(id)
+  SendTab["x"] = x
+  SendTab["y"] = y
+  SendTab["text"] = tostring(text)
+  SendTab["color"] = Color(color[1], color[2], color[3])
+  SendTab["parent"] = tostring(parent)
+
   net.Start("f_drawderma")
-    net.WriteEntity(chip)
-    net.WriteString("text")
-    net.WriteString(tostring(id))
-
-    net.WriteFloat(x)
-    net.WriteFloat(y)
-
-    net.WriteFloat(color[1])
-    net.WriteFloat(color[2])
-    net.WriteFloat(color[3])
-
-    net.WriteString(text)
-    net.WriteString(tostring(parent))
+    net.WriteTable(SendTab)
   net.Send(ply)
 end
 
-local function drawDButton(chip, ply, id, x, y, width, height, text, parent)
+local function drawDButton(chip, ply, id, x, y, width, height, text, parent, color)
   if not IsValid(chip) and not chip then return end
   if not id then return end
   if not parent then return end
@@ -134,19 +139,25 @@ local function drawDButton(chip, ply, id, x, y, width, height, text, parent)
   if not width then width = 0 end
   if not height then height = 0 end
 
+  if not color then color = Color(255,255,255) end
+
+  local SendTab = {}
+  SendTab["chip"] = chip
+  SendTab["type"] = "button"
+  SendTab["id"] = tostring(id)
+  SendTab["x"] = x
+  SendTab["y"] = y
+  SendTab["w"] = width
+  SendTab["h"] = height
+  SendTab["text"] = text
+  SendTab["color"] = Color(color[1],color[2],color[3])
+  if(table.Count(color)==4) then
+    SendTab["color"] = Color(color[1],color[2],color[3],color[4])
+  end
+  SendTab["parent"] = tostring(parent)
+
   net.Start("f_drawderma")
-    net.WriteEntity(chip)
-    net.WriteString("button")
-    net.WriteString(tostring(id))
-
-    net.WriteFloat(x)
-    net.WriteFloat(y)
-
-    net.WriteFloat(width)
-    net.WriteFloat(height)
-
-    net.WriteString(text)
-    net.WriteString(tostring(parent))
+    net.WriteTable(SendTab)
   net.Send(ply)
 end
 
@@ -163,20 +174,47 @@ local function drawDTextEntry(chip, ply, id, x, y, width, height, text, parent)
   if not width then width = 0 end
   if not height then height = 0 end
 
+  local SendTab = {}
+  SendTab["chip"] = chip
+  SendTab["type"] = "textentry"
+  SendTab["id"] = tostring(id)
+  SendTab["x"] = x
+  SendTab["y"] = y
+  SendTab["w"] = width
+  SendTab["h"] = height
+  SendTab["text"] = text
+  SendTab["parent"] = tostring(parent)
+
   net.Start("f_drawderma")
-    net.WriteEntity(chip)
-    net.WriteString("textentry")
-    net.WriteString(tostring(id))
-
-    net.WriteFloat(x)
-    net.WriteFloat(y)
-
-    net.WriteFloat(width)
-    net.WriteFloat(height)
-
-    net.WriteString(text)
-    net.WriteString(tostring(parent))
+    net.WriteTable(SendTab)
   net.Send(ply)
+end
+
+local function drawRoundedBox(chip, ply, id, x, y, width, height, color)
+  if not chip then return end
+  if not id then return end
+
+  if not x then x = 0 end
+  if not y then y = 0 end
+  if not width then width = 0 end
+  if not height then height = 0 end
+  if not color then color = Color(255,255,255) end
+
+  if istable(color) then if table.Count(color) < 4 then color = Color(color[1],color[2],color[3]) else color = Color(color[1],color[2],color[3],color[4]) end end
+
+  local SendTab = {}
+  SendTab["id"] = tostring(id)
+  SendTab["type"] = "roundedbox"
+  SendTab["x"] = x
+  SendTab["y"] = y
+  SendTab["w"] = width
+  SendTab["h"] = height
+  SendTab["color"] = color
+
+  net.Start("f_paint")
+    net.WriteTable(SendTab)
+  net.Send(ply)
+
 end
 
 local function canRunDerma(chip, ply)
@@ -188,6 +226,9 @@ local function canRunDerma(chip, ply)
 
   if Plys[ply][chip] == true then return 1 end
   if Plys[ply][chip] == false then return 0 end
+  if chip.ClkTimeDAccept == CurTime() then return 0 end
+  if chip.ClkTimeDButton == CurTime() then return 0 end
+  if chip.ClkTimeDTBox == CurTime() then return 0 end
 end
 
 --
@@ -226,12 +267,20 @@ end
 
 --
 
+e2function void entity:dermaButton(string id, string text, vector2 pos, vector2 size, string parent, vector color)
+  drawDButton(self.entity, this, id, pos[1], pos[2], size[1], size[2], text, parent, color)
+end
+
+e2function void entity:dermaButton(string id, vector2 pos, vector2 size, string parent, vector color)
+  drawDButton(self.entity, this, id, pos[1], pos[2], size[1], size[2], "Button", parent, color)
+end
+
 e2function void entity:dermaButton(string id, string text, vector2 pos, vector2 size, string parent)
-  drawDButton(self.entity, this, id, pos[1], pos[2], size[1], size[2], text, parent)
+  drawDButton(self.entity, this, id, pos[1], pos[2], size[1], size[2], text, parent, {255,255,255})
 end
 
 e2function void entity:dermaButton(string id, vector2 pos, vector2 size, string parent)
-  drawDButton(self.entity, this, id, pos[1], pos[2], size[1], size[2], "Button", parent)
+  drawDButton(self.entity, this, id, pos[1], pos[2], size[1], size[2], "Button", parent, {255,255,255})
 end
 
 --
@@ -252,9 +301,26 @@ end
 
 --
 
+e2function void entity:dermaDrawRoundedBox(string id, vector2 pos, vector2 size, vector color)
+  drawRoundedBox(self.entity, this, id, pos[1], pos[2], size[1], size[2], color)
+end
+
+e2function void entity:dermaDrawRoundedBox(string id, vector2 pos, vector2 size, vector4 color)
+  drawRoundedBox(self.entity, this, id, pos[1], pos[2], size[1], size[2], color)
+end
+
+--
+
 e2function number dermaAcceptClk()
   if not self.entity.ClkTimeDAccept then return 0 end
   return self.entity.ClkTimeDAccept == CurTime() and 1 or 0
+end
+
+e2function entity dermaAcceptClkPly()
+  if not self.entity.ClkAcceptPly then return nil end
+  if not self.entity.ClkAcceptPly:IsPlayer() then return nil end
+
+  return self.entity.ClkAcceptPly
 end
 
 e2function number dermaButtonClk()
